@@ -16,6 +16,10 @@ export default function AuthPage() {
     // Log in directly with selected role
     loginAsDev(role)
     
+    // Show success toast
+    const roleLabel = role === 'admin' ? 'Admin' : role === 'observer' ? 'Observer' : 'Member';
+    addToast(`✓ Logged in as ${roleLabel}`, 'success', 3000);
+    
     // Redirect based on role
     if (role === 'admin') {
       navigate('/dashboard')
@@ -31,12 +35,14 @@ export default function AuthPage() {
       display: 'flex',
       minHeight: '100vh',
       background: 'var(--bg-base)',
+      flexDirection: window.innerWidth < 768 ? 'column' : 'row',
     }}>
       {/* Left Side - Branding */}
       <div style={{
-        flex: 1,
+        flex: window.innerWidth < 768 ? 'none' : 1,
+        minHeight: window.innerWidth < 768 ? '40vh' : 'auto',
         background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-        padding: '64px 48px',
+        padding: window.innerWidth < 768 ? '32px 24px' : '64px 48px',
         display: 'flex',
         flexDirection: 'column',
         color: 'white',
@@ -56,7 +62,7 @@ export default function AuthPage() {
         }} />
 
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 64, position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: window.innerWidth < 768 ? 32 : 64, position: 'relative', zIndex: 1 }}>
           <div style={{
             width: 40,
             height: 40,
@@ -74,7 +80,7 @@ export default function AuthPage() {
         {/* Headline */}
         <div style={{ position: 'relative', zIndex: 1, flex: 1 }}>
           <h1 style={{
-            fontSize: 36,
+            fontSize: window.innerWidth < 768 ? 24 : 36,
             fontWeight: 700,
             lineHeight: 1.2,
             marginBottom: 16,
@@ -83,17 +89,17 @@ export default function AuthPage() {
             From meeting<br />to done — in minutes.
           </h1>
           <p style={{
-            fontSize: 15,
+            fontSize: window.innerWidth < 768 ? 14 : 15,
             color: 'rgba(255,255,255,0.7)',
             lineHeight: 1.6,
             maxWidth: 380,
-            marginBottom: 48,
+            marginBottom: window.innerWidth < 768 ? 24 : 48,
           }}>
             Paste any transcript. MeetFlow extracts every commitment, assigns it, and keeps your team accountable automatically.
           </p>
 
           {/* Features */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: window.innerWidth < 768 ? 'none' : 'flex', flexDirection: 'column', gap: 16 }}>
             <Feature icon={CheckCircle} text="No credit card required" />
             <Feature icon={CheckCircle} text="Up and running in 60 seconds" />
             <Feature icon={CheckCircle} text="AI extracts tasks automatically" />
@@ -102,6 +108,7 @@ export default function AuthPage() {
 
         {/* Testimonial */}
         <div style={{
+          display: window.innerWidth < 768 ? 'none' : 'block',
           position: 'relative',
           zIndex: 1,
           background: 'rgba(255,255,255,0.05)',
@@ -144,16 +151,16 @@ export default function AuthPage() {
 
       {/* Right Side - Auth */}
       <div style={{
-        width: 520,
-        padding: '64px 48px',
+        width: window.innerWidth < 768 ? '100%' : window.innerWidth < 1024 ? 440 : 520,
+        padding: window.innerWidth < 768 ? '32px 24px' : '64px 48px',
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--bg-base)',
       }}>
         {/* Header */}
-        <div style={{ marginBottom: 48 }}>
+        <div style={{ marginBottom: window.innerWidth < 768 ? 32 : 48 }}>
           <h2 style={{
-            fontSize: 28,
+            fontSize: window.innerWidth < 768 ? 24 : 28,
             fontWeight: 600,
             color: 'var(--text-primary)',
             marginBottom: 8,

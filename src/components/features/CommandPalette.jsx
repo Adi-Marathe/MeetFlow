@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Video, CheckSquare, X, LayoutGrid } from 'lucide-react';
-import { meetings } from '../../mock/meetings';
-import { tasks } from '../../mock/tasks';
+import { useRecords } from 'lemma-sdk/react';
+import { podClient } from '../../lib/lemma';
 import { formatDate } from '../../lib/utils';
 
 export function CommandPalette({ isOpen, onClose }) {
@@ -11,6 +11,10 @@ export function CommandPalette({ isOpen, onClose }) {
   const inputRef = useRef(null);
   const navigate = useNavigate();
   const resultsRef = useRef([]);
+
+  // Fetch data from pod
+  const { records: meetings = [] } = useRecords({ client: podClient, tableName: 'meetings' });
+  const { records: tasks = [] } = useRecords({ client: podClient, tableName: 'tasks' });
 
   const filteredMeetings = meetings.filter(m =>
     !query || m.title.toLowerCase().includes(query.toLowerCase())

@@ -1,37 +1,61 @@
-import { useState } from 'react';
-import { Check, Circle, AlertCircle, Loader } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { PageWrapper } from '../components/layout/PageWrapper';
 import { Toggle } from '../components/ui/Toggle';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
-import { useRecords, useUpdateRecord } from 'lemma-sdk/react';
+import { useRecords, useUpdateRecord, useCreateRecord } from 'lemma-sdk/react';
 import { client } from '../lib/lemma';
+import { useToast } from '../context/ToastContext';
+import { useCurrentMember } from '../hooks/useCurrentMember';
+import { 
+  FaSlack, 
+  FaWhatsapp, 
+  FaTelegram, 
+  FaGoogle, 
+  FaVideo, 
+  FaMicrosoft 
+} from 'react-icons/fa';
+import { 
+  HiBell, 
+  HiCheckCircle, 
+  HiClock, 
+  HiDocumentText, 
+  HiMail 
+} from 'react-icons/hi';
+import { IoIosFlash } from 'react-icons/io';
+import { MdSettingsSuggest, MdGroups, MdIntegrationInstructions, MdNotifications } from 'react-icons/md';
 
 const SETTINGS_NAV = [
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'members', label: 'Members' },
-  { id: 'integrations', label: 'Integrations' },
-  { id: 'notifications', label: 'Notifications' },
+  { id: 'workspace', label: 'Workspace', icon: MdSettingsSuggest },
+  { id: 'members', label: 'Members', icon: MdGroups },
+  { id: 'integrations', label: 'Integrations', icon: MdIntegrationInstructions },
+  { id: 'notifications', label: 'Notifications', icon: MdNotifications },
 ];
 
 const INTEGRATIONS = [
   {
     id: 'slack',
     name: 'Slack',
-    desc: 'Routes to #general via Lemma Surface',
+    desc: 'Send follow-up messages via Slack DM',
     status: 'connected',
     statusLabel: 'Connected',
-    icon: '💬',
-    color: '#2a8a5e',
+    icon: FaSlack,
+    color: '#E01E5A', // Changed from dark #4A154B to bright pink for better visibility
+    bgColor: 'rgba(224, 30, 90, 0.1)',
+    available: true,
+    alwaysActive: true, // Managed by Lemma connectors
   },
   {
-    id: 'whatsapp',
-    name: 'WhatsApp',
-    desc: 'Using Lemma shared number',
-    status: 'live',
-    statusLabel: 'Live',
-    icon: '📱',
-    color: '#25d366',
+    id: 'telegram',
+    name: 'Telegram',
+    desc: 'Route follow-ups via Telegram bot',
+    status: 'connected',
+    statusLabel: 'Connected',
+    icon: FaTelegram,
+    color: '#229ED9',
+    bgColor: 'rgba(34, 158, 217, 0.1)',
+    available: true,
+    alwaysActive: true, // Managed by Lemma connectors
   },
   {
     id: 'lemma',
@@ -39,76 +63,104 @@ const INTEGRATIONS = [
     desc: 'meeting-extraction-workflow running',
     status: 'active',
     statusLabel: 'Active',
-    icon: '⚡',
+    icon: IoIosFlash,
     color: '#F4622A',
+    bgColor: 'rgba(244, 98, 42, 0.1)',
+    available: true,
+    alwaysActive: true,
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    desc: 'Business API integration',
+    status: 'soon',
+    statusLabel: 'Coming soon',
+    icon: FaWhatsapp,
+    color: '#25D366',
+    bgColor: 'rgba(37, 211, 102, 0.1)',
+    available: false,
+    alwaysActive: false,
   },
   {
     id: 'google_meet',
     name: 'Google Meet',
-    desc: 'Connect to import meetings automatically',
-    status: 'disconnected',
-    statusLabel: 'Connect',
-    icon: '🎥',
-    color: '#4285f4',
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    desc: 'Route follow-ups via Telegram bot',
-    status: 'disconnected',
-    statusLabel: 'Connect',
-    icon: '✈️',
-    color: '#229ed9',
+    desc: 'Import meetings automatically',
+    status: 'soon',
+    statusLabel: 'Coming soon',
+    icon: FaGoogle,
+    color: '#4285F4',
+    bgColor: 'rgba(66, 133, 244, 0.1)',
+    available: false,
+    alwaysActive: false,
   },
   {
     id: 'zoom',
     name: 'Zoom',
-    desc: 'Native integration — coming soon',
+    desc: 'Native integration',
     status: 'soon',
     statusLabel: 'Coming soon',
-    icon: '📹',
-    color: '#8a8478',
+    icon: FaVideo,
+    color: '#2D8CFF',
+    bgColor: 'rgba(45, 140, 255, 0.1)',
+    available: false,
+    alwaysActive: false,
   },
   {
     id: 'teams',
     name: 'Microsoft Teams',
-    desc: 'Enterprise integration — coming soon',
+    desc: 'Enterprise integration',
     status: 'soon',
     statusLabel: 'Coming soon',
-    icon: '🏢',
-    color: '#8a8478',
+    icon: FaMicrosoft,
+    color: '#5059C9',
+    bgColor: 'rgba(80, 89, 201, 0.1)',
+    available: false,
+    alwaysActive: false,
   },
 ];
 
 const NOTIFICATION_SETTINGS = [
-  { id: 'task_assigned', label: 'Task assigned to me', desc: 'When a new task is assigned from a meeting' },
-  { id: 'task_overdue', label: 'Task overdue', desc: 'Daily digest of overdue tasks' },
-  { id: 'meeting_extracted', label: 'Meeting processed', desc: 'When AI finishes extracting tasks' },
-  { id: 'followup_sent', label: 'Follow-up sent', desc: 'When an automated follow-up fires' },
+  { id: 'task_assigned', label: 'Task assigned to me', desc: 'When a new task is assigned from a meeting', icon: HiDocumentText },
+  { id: 'task_overdue', label: 'Task overdue', desc: 'Daily digest of overdue tasks', icon: HiClock },
+  { id: 'meeting_extracted', label: 'Meeting processed', desc: 'When AI finishes extracting tasks', icon: HiCheckCircle },
+  { id: 'followup_sent', label: 'Follow-up sent', desc: 'When an automated follow-up fires', icon: HiMail },
 ];
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('integrations');
+  const { addToast } = useToast();
+  const { email: currentEmail } = useCurrentMember();
+  
   const { records: members = [] } = useRecords({ client, tableName: 'members' });
-  const updateMember = useUpdateRecord({ client, tableName: '' });
+  const updateMember = useUpdateRecord({ client, tableName: 'members' });
   
   const [memberRoles, setMemberRoles] = useState({});
-  const [integrationStates, setIntegrationStates] = useState({});
+  const [notifications, setNotifications] = useState(
+    Object.fromEntries(NOTIFICATION_SETTINGS.map(n => [n.id, true]))
+  );
 
   useEffect(() => {
     if (members.length > 0 && Object.keys(memberRoles).length === 0) {
       setMemberRoles(Object.fromEntries(members.map(m => [m.id, m.role])));
     }
   }, [members]);
-  const [notifications, setNotifications] = useState(
-    Object.fromEntries(NOTIFICATION_SETTINGS.map(n => [n.id, true]))
-  );
 
-  function handleConnect(integId) {
-    setIntegrationStates(prev => ({ ...prev, [integId]: 'loading' }));
-    setTimeout(() => {
-      setIntegrationStates(prev => ({ ...prev, [integId]: 'connected' }));
-    }, 1800);
+  function handleToggleIntegration(integId, integ) {
+    // Check if integration is always active (managed by Lemma)
+    if (integ.alwaysActive) {
+      addToast(
+        `${integ.name} is managed by Lemma connectors and cannot be toggled from the app`,
+        'info',
+        4000
+      );
+      return;
+    }
+
+    // Check if integration is not available yet
+    if (!integ.available) {
+      addToast(`${integ.name} is not available yet. Coming soon!`, 'info', 3000);
+      return;
+    }
   }
 
   return (
@@ -125,30 +177,37 @@ export default function Settings() {
           <div style={{ padding: '0 16px', marginBottom: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Settings</h2>
           </div>
-          {SETTINGS_NAV.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              style={{
-                width: '100%',
-                padding: '8px 16px',
-                textAlign: 'left',
-                fontSize: 13,
-                fontFamily: 'var(--font-sans)',
-                cursor: 'pointer',
-                background: activeTab === item.id ? 'var(--accent-subtle)' : 'transparent',
-                color: activeTab === item.id ? 'var(--text-accent)' : 'var(--text-secondary)',
-                border: 'none',
-                borderLeft: activeTab === item.id ? '2px solid var(--accent)' : '2px solid transparent',
-                fontWeight: activeTab === item.id ? 500 : 400,
-                transition: 'all var(--duration-fast)',
-              }}
-              onMouseEnter={e => { if (activeTab !== item.id) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              onMouseLeave={e => { if (activeTab !== item.id) e.currentTarget.style.background = 'transparent'; }}
-            >
-              {item.label}
-            </button>
-          ))}
+          {SETTINGS_NAV.map(item => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  fontSize: 13,
+                  fontFamily: 'var(--font-sans)',
+                  cursor: 'pointer',
+                  background: activeTab === item.id ? 'var(--accent-subtle)' : 'transparent',
+                  color: activeTab === item.id ? 'var(--text-accent)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderLeft: activeTab === item.id ? '2px solid var(--accent)' : '2px solid transparent',
+                  fontWeight: activeTab === item.id ? 500 : 400,
+                  transition: 'all var(--duration-fast)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+                onMouseEnter={e => { if (activeTab !== item.id) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { if (activeTab !== item.id) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}
@@ -243,9 +302,17 @@ export default function Settings() {
                         const newRole = e.target.value;
                         setMemberRoles(prev => ({ ...prev, [member.id]: newRole }));
                         try {
-                          await updateMember.mutateAsync({ id: member.id, updates: { role: newRole } });
+                          await updateMember.update({
+                            role: newRole
+                          }, {
+                            recordId: member.id
+                          });
+                          addToast(`Updated ${member.name}'s role to ${newRole}`, 'success', 2000);
                         } catch (error) {
                           console.error("Failed to update role:", error);
+                          addToast('Failed to update role. Please try again.', 'error', 3000);
+                          // Revert on error
+                          setMemberRoles(prev => ({ ...prev, [member.id]: member.role }));
                         }
                       }}
                       style={{
@@ -295,105 +362,111 @@ export default function Settings() {
                 ✦ Live integrations power automated follow-ups via Lemma SDK
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                 {INTEGRATIONS.map(integ => {
-                  const state = integrationStates[integ.id];
-                  const isConnected = ['connected', 'live', 'active'].includes(integ.status) || state === 'connected';
-                  const isLoading = state === 'loading';
+                  const Icon = integ.icon;
+                  const isConnected = ['connected', 'live', 'active'].includes(integ.status);
                   const isSoon = integ.status === 'soon';
-
-                  const statusColors = {
-                    connected: '#2a8a5e',
-                    live: '#25d366',
-                    active: '#F4622A',
-                  };
-                  const dotColor = statusColors[integ.status] || '#8a8478';
+                  const isAlwaysActive = integ.alwaysActive;
 
                   return (
                     <div
                       key={integ.id}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 14,
-                        padding: '16px',
+                        padding: '20px',
                         background: 'var(--bg-surface)',
-                        border: `1px solid ${isConnected ? 'rgba(42,138,94,0.2)' : 'var(--border-subtle)'}`,
+                        border: `1px solid ${isConnected ? integ.color + '40' : 'var(--border-subtle)'}`,
                         borderRadius: 'var(--radius-lg)',
-                        transition: 'border-color var(--duration-fast)',
+                        transition: 'all var(--duration-fast)',
+                        position: 'relative',
+                        overflow: 'hidden',
                       }}
                     >
-                      <span style={{ fontSize: 22, flexShrink: 0 }}>{integ.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                          {integ.name}
+                      {/* Background glow */}
+                      {isConnected && (
+                        <div style={{
+                          position: 'absolute',
+                          top: -50,
+                          right: -50,
+                          width: 150,
+                          height: 150,
+                          background: `radial-gradient(circle, ${integ.color}15 0%, transparent 70%)`,
+                          borderRadius: '50%',
+                          pointerEvents: 'none',
+                        }} />
+                      )}
+
+                      {/* Header */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16, position: 'relative', zIndex: 1 }}>
+                        <div style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 'var(--radius-md)',
+                          background: integ.bgColor,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <Icon size={24} color={integ.color} />
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: isConnected ? 'italic' : 'normal' }}>
-                          {integ.desc}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                            {integ.name}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                            {integ.desc}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Status */}
-                      {isConnected && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            background: dotColor,
-                            animation: 'pulsingDot 2s ease-in-out infinite',
-                            flexShrink: 0,
-                          }} />
-                          <span style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: dotColor,
-                          }}>
-                            {integ.statusLabel}
-                          </span>
-                        </div>
-                      )}
+                      {/* Status/Action */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
+                        {isConnected && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: integ.color,
+                              animation: 'pulse 2s ease-in-out infinite',
+                            }} />
+                            <span style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: integ.color,
+                            }}>
+                              {integ.statusLabel}
+                            </span>
+                          </div>
+                        )}
 
-                      {!isConnected && !isSoon && (
-                        <button
-                          onClick={() => handleConnect(integ.id)}
-                          disabled={isLoading}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 14px',
-                            background: isLoading ? 'var(--bg-elevated)' : 'var(--accent-subtle)',
-                            border: '1px solid var(--border-accent)',
-                            borderRadius: 'var(--radius-md)',
+                        {!isConnected && isSoon && (
+                          <span style={{
                             fontSize: 11,
+                            color: 'var(--text-muted)',
+                            background: 'var(--bg-elevated)',
+                            padding: '5px 12px',
+                            borderRadius: 'var(--radius-full)',
                             fontWeight: 500,
-                            color: 'var(--text-accent)',
-                            cursor: isLoading ? 'default' : 'pointer',
-                            fontFamily: 'var(--font-sans)',
-                            transition: 'all var(--duration-fast)',
-                          }}
-                        >
-                          {isLoading && (
-                            <svg width="12" height="12" viewBox="0 0 12 12" style={{ animation: 'spinArc 0.8s linear infinite' }}>
-                              <circle cx="6" cy="6" r="4" fill="none" stroke="var(--accent)" strokeWidth="1.5"
-                                strokeDasharray="16 8" strokeLinecap="round" />
-                            </svg>
-                          )}
-                          {isLoading ? 'Connecting…' : 'Connect'}
-                        </button>
-                      )}
+                          }}>
+                            Coming soon
+                          </span>
+                        )}
 
-                      {isSoon && (
-                        <span style={{
-                          fontSize: 11,
-                          color: 'var(--text-muted)',
-                          background: 'var(--bg-elevated)',
-                          padding: '4px 10px',
-                          borderRadius: 'var(--radius-full)',
-                          fontWeight: 500,
-                        }}>
-                          Coming soon
-                        </span>
-                      )}
+                        {/* Toggle for always active integrations - but shows toast when clicked */}
+                        {isAlwaysActive && (
+                          <div 
+                            onClick={() => handleToggleIntegration(integ.id, integ)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <Toggle
+                              checked={true}
+                              onChange={() => {}} // No-op, actual handler is on parent div
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -408,30 +481,47 @@ export default function Settings() {
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>Choose which events trigger notifications.</p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {NOTIFICATION_SETTINGS.map(setting => (
-                  <div
-                    key={setting.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 16,
-                      padding: '16px 0',
-                      borderBottom: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>
-                        {setting.label}
+                {NOTIFICATION_SETTINGS.map(setting => {
+                  const Icon = setting.icon;
+                  return (
+                    <div
+                      key={setting.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 16,
+                        padding: '16px 0',
+                        borderBottom: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1 }}>
+                        <div style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--accent-subtle)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <Icon size={18} color="var(--accent)" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>
+                            {setting.label}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{setting.desc}</div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{setting.desc}</div>
+                      <Toggle
+                        checked={notifications[setting.id]}
+                        onChange={val => setNotifications(prev => ({ ...prev, [setting.id]: val }))}
+                      />
                     </div>
-                    <Toggle
-                      checked={notifications[setting.id]}
-                      onChange={val => setNotifications(prev => ({ ...prev, [setting.id]: val }))}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

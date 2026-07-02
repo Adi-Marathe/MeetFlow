@@ -2,15 +2,17 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Video, Plus, Filter, ChevronRight, Clock, Users, CheckCircle, AlertCircle, Loader, Monitor, MessageSquare, FileText } from 'lucide-react';
 import { PageWrapper } from '../components/layout/PageWrapper';
-import { TranscriptUploader } from '../components/features/TranscriptUploader';
+import { NewMeetingModal } from '../components/features/NewMeetingModal';
 import { Modal } from '../components/ui/Modal';
 import { Avatar } from '../components/ui/Avatar';
 import { useRecords } from 'lemma-sdk/react';
 import { client } from '../lib/lemma';
 import { formatDate, formatDateFull, getSourceLabel } from '../lib/utils';
+import { useCurrentMember } from '../hooks/useCurrentMember';
 
 const STATUS_CONFIG = {
   approved:       { label: 'Approved', bg: 'var(--status-done-bg)', color: 'var(--status-done)' },
+  completed:      { label: 'Completed', bg: 'var(--success-subtle)', color: 'var(--success)' },
   extracted:      { label: 'Extracted', bg: 'var(--amber-subtle)', color: 'var(--amber)' },
   pending_review: { label: 'Pending review', bg: 'var(--warning-subtle)', color: 'var(--warning)' },
   done:           { label: 'Done', bg: 'var(--status-done-bg)', color: 'var(--status-done)' },
@@ -18,7 +20,7 @@ const STATUS_CONFIG = {
 
 const SOURCE_ICONS = { google_meet: Video, zoom: Monitor, slack: MessageSquare, teams: Users, default: FileText };
 
-const FILTERS = ['All', 'Approved', 'Pending review', 'Extracted'];
+const FILTERS = ['All', 'Completed', 'Approved', 'Pending review', 'Extracted'];
 
 function MeetingRow({ meeting, index }) {
   const navigate = useNavigate();
@@ -33,7 +35,12 @@ function MeetingRow({ meeting, index }) {
   const sourceKey = (meeting.source || '').toLowerCase().replace(' ', '_');
   const SourceIcon = SOURCE_ICONS[sourceKey] || SOURCE_ICONS.default;
 
-  const participants = (meeting.participants || [])
+  // Handle participants as either array or comma-separated string
+  const participantEmails = Array.isArray(meeting.participants)
+    ? meeting.participants
+    : (meeting.participants || '').split(',').map(e => (e || '').trim()).filter(Boolean);
+
+  const participants = participantEmails
     .map(email => members.find(m => m.email === email))
     .filter(Boolean);
 
@@ -130,26 +137,50 @@ export default function Meetings() {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [newMeetingOpen, setNewMeetingOpen] = useState(false);
-  const { records: meetings = [] } = useRecords({ client, tableName: 'meetings' });
+  const { isAdmin } = useCurrentMember();
+  const { records: meetings = [] } = useRecords({ 
+    client, 
+    tableName: 'meetings',
+    sort: [{ field: 'date', direction: 'desc' }],
+  });
   const { records: allTasks = [] } = useRecords({ client, tableName: 'tasks' });
 
   const filtered = useMemo(() => {
     return meetings.filter(m => {
       const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase());
-      const statusCfg = STATUS_CONFIG[m.status];
-      const matchFilter = activeFilter === 'All' ||
-        (statusCfg && statusCfg.label.toLowerCase() === activeFilter.toLowerCase());
+      
+      if (activeFilter === 'All') {
+        return matchSearch;
+      }
+      
+      // Map filter labels to status values
+      const filterToStatus = {
+        'Completed': 'completed',
+        'Approved': 'approved',
+        'Pending review': 'pending_review',
+        'Extracted': 'extracted',
+      };
+      
+      const targetStatus = filterToStatus[activeFilter];
+      const matchFilter = targetStatus ? m.status === targetStatus : true;
+      
       return matchSearch && matchFilter;
     });
-  }, [search, activeFilter]);
+  }, [search, activeFilter, meetings]);
 
   const totalTasks = allTasks.length;
+  const completedMeetings = meetings.filter(m => m.status === 'completed').length;
   const approvedMeetings = meetings.filter(m => m.status === 'approved').length;
   const pendingMeetings = meetings.filter(m => m.status === 'pending_review').length;
 
   return (
     <PageWrapper>
-      <div style={{ padding: '28px 36px', maxWidth: 920, margin: '0 auto' }}>
+      <div style={{ 
+        padding: '28px clamp(20px, 5vw, 48px) 80px',
+        paddingTop: window.innerWidth < 768 ? '80px' : '28px',
+        maxWidth: '100%',
+        width: '100%',
+      }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
@@ -161,27 +192,34 @@ export default function Meetings() {
               {meetings.length} meetings · {totalTasks} tasks extracted
             </p>
           </div>
-          <button
-            onClick={() => setNewMeetingOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              height: 40, padding: '0 18px',
-              background: 'var(--accent)', color: '#fff',
-              border: 'none', borderRadius: 'var(--radius-md)',
-              fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
-              transition: 'background var(--duration-fast)',
-              flexShrink: 0,
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-hover)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
-          >
-            <Plus size={15} /> New meeting
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setNewMeetingOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                height: 40, padding: '0 18px',
+                background: 'var(--accent)', color: '#fff',
+                border: 'none', borderRadius: 'var(--radius-md)',
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+                transition: 'background var(--duration-fast)',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
+            >
+              <Plus size={15} /> New meeting
+            </button>
+          )}
         </div>
 
         {/* Stats strip */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        <div style={{ 
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+          marginBottom: 24,
+        }}>
           {[
             { icon: Video, label: 'Total meetings', value: meetings.length, color: 'var(--accent)' },
             { icon: CheckCircle, label: 'Approved', value: approvedMeetings, color: 'var(--success)' },
@@ -257,8 +295,8 @@ export default function Meetings() {
       </div>
 
       {/* New Meeting Modal */}
-      <Modal isOpen={newMeetingOpen} onClose={() => setNewMeetingOpen(false)} title="New Meeting">
-        <TranscriptUploader onSuccess={() => setNewMeetingOpen(false)} />
+      <Modal isOpen={newMeetingOpen} onClose={() => setNewMeetingOpen(false)} title="New Meeting" maxWidth={640}>
+        <NewMeetingModal onClose={() => setNewMeetingOpen(false)} />
       </Modal>
     </PageWrapper>
   );

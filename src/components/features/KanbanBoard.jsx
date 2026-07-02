@@ -16,9 +16,10 @@ const COLUMNS = [
   { id: 'todo', label: 'To do' },
   { id: 'inprogress', label: 'In progress' },
   { id: 'done', label: 'Done' },
+  { id: 'blocked', label: 'Blocked' },
 ];
 
-function Column({ col, tasks, readOnly, isOver, draggingTask }) {
+function Column({ col, tasks, readOnly, isOver, draggingTask, canDragTask }) {
   const { setNodeRef } = useDroppable({
     id: col.id,
     data: {
@@ -39,7 +40,8 @@ function Column({ col, tasks, readOnly, isOver, draggingTask }) {
         border: `1px solid ${isOver && draggingTask?.status !== col.id ? 'var(--border-accent)' : 'var(--border-subtle)'}`,
         borderTop: `4px solid ${
           col.id === 'todo' ? 'var(--status-todo)' :
-          col.id === 'inprogress' ? 'var(--status-inprogress)' : 'var(--status-done)'
+          col.id === 'inprogress' ? 'var(--status-inprogress)' :
+          col.id === 'blocked' ? 'var(--danger)' : 'var(--status-done)'
         }`,
         borderRadius: 'var(--radius-xl)',
         padding: 12,
@@ -58,7 +60,8 @@ function Column({ col, tasks, readOnly, isOver, draggingTask }) {
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
             background: col.id === 'todo' ? 'var(--status-todo)' :
-              col.id === 'inprogress' ? 'var(--status-inprogress)' : 'var(--status-done)',
+              col.id === 'inprogress' ? 'var(--status-inprogress)' :
+              col.id === 'blocked' ? 'var(--danger)' : 'var(--status-done)',
             flexShrink: 0,
           }} />
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -77,7 +80,7 @@ function Column({ col, tasks, readOnly, isOver, draggingTask }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto' }}>
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {tasks.map(task => (
-            <TaskCard key={task.id} task={task} draggable={!readOnly} />
+            <TaskCard key={task.id} task={task} draggable={!readOnly && canDragTask(task)} />
           ))}
         </SortableContext>
       </div>
@@ -106,23 +109,34 @@ function Column({ col, tasks, readOnly, isOver, draggingTask }) {
   );
 }
 
-export function KanbanBoard({ tasks: initialTasks, readOnly = false }) {
+export function KanbanBoard({ tasks: initialTasks, readOnly = false, currentUserEmail = null, userRole = 'member' }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [activeTask, setActiveTask] = useState(null);
   const [activeOver, setActiveOver] = useState(null);
-  const updateTask = useUpdateRecord({ client, tableName: '' });
+  const updateTask = useUpdateRecord({ client, tableName: 'tasks' });
 
   // Sync with upstream prop if the DB updates externally
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
 
+  // Check if user can drag this task
+  const canDragTask = useCallback((task) => {
+    if (readOnly) return false;
+    if (userRole === 'admin') return true;
+    if (userRole === 'member') return task.owner === currentUserEmail;
+    return false; // observer
+  }, [readOnly, userRole, currentUserEmail]);
+
 
   const handleDragStart = useCallback((event) => {
     const { active } = event;
     const task = tasks.find(t => t.id === active.id);
+    if (!task || !canDragTask(task)) {
+      return;
+    }
     setActiveTask(task);
-  }, [tasks]);
+  }, [tasks, canDragTask]);
 
   const handleDragOver = useCallback((event) => {
     const { over } = event;
@@ -169,7 +183,11 @@ export function KanbanBoard({ tasks: initialTasks, readOnly = false }) {
     });
 
     if (destinationStatus !== task.status) {
-      updateTask.mutateAsync({ id: activeId, updates: { status: destinationStatus } }).catch(err => {
+      updateTask.update({
+        status: destinationStatus
+      }, {
+        recordId: activeId
+      }).catch(err => {
         console.error("Failed to update task status in Kanban:", err);
       });
     }
@@ -220,6 +238,7 @@ export function KanbanBoard({ tasks: initialTasks, readOnly = false }) {
               readOnly={readOnly}
               isOver={isColOver}
               draggingTask={activeTask}
+              canDragTask={canDragTask}
             />
           );
         })}

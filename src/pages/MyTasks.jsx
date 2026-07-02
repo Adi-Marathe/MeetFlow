@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, MessageSquare, ExternalLink, LayoutList, LayoutGrid, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageWrapper } from '../components/layout/PageWrapper';
-import { useAuth } from '../context/AuthContext';
+import { useCurrentMember } from '../hooks/useCurrentMember';
 import { useToast } from '../context/ToastContext';
 import { Confetti } from '../components/ui/Confetti';
 import { MyTasksKanban } from '../components/features/MyTasksKanban';
@@ -22,7 +22,7 @@ const FILTERS = [
 const STATUS_LABELS = { todo: 'To do', inprogress: 'In progress', done: 'Done' };
 
 export default function MyTasks() {
-  const { currentUser } = useAuth();
+  const { member: currentUser, email } = useCurrentMember();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
@@ -37,7 +37,7 @@ export default function MyTasks() {
 
   const { records: allTasks = [] } = useRecords({ client, tableName: 'tasks' });
   const { records: meetings = [] } = useRecords({ client, tableName: 'meetings' });
-  const updateTask = useUpdateRecord({ client, tableName: '' });
+  const updateTask = useUpdateRecord({ client, tableName: 'tasks' });
 
   const myTasks = useMemo(() => {
     return allTasks.filter(t => t.owner === currentUser?.email);
@@ -73,14 +73,22 @@ export default function MyTasks() {
       setTimeout(() => setConfetti(null), 1200);
     }
     try {
-      await updateTask.mutateAsync({ id: taskId, updates: { status: next } });
+      await updateTask.update({
+        status: next
+      }, {
+        recordId: taskId
+      });
     } catch (err) { console.error('Failed to update task:', err); }
   }
 
   async function handleStatusChange(taskId, newStatus) {
     setTaskStates(prev => ({ ...prev, [taskId]: newStatus }));
     try {
-      await updateTask.mutateAsync({ id: taskId, updates: { status: newStatus } });
+      await updateTask.update({
+        status: newStatus
+      }, {
+        recordId: taskId
+      });
     } catch (err) { console.error('Failed to update task:', err); }
   }
 
@@ -121,11 +129,12 @@ export default function MyTasks() {
         maxWidth: view === 'kanban' ? '100%' : 860,
         width: '100%',
         margin: '0 auto', 
-        padding: '40px 32px',
+        padding: window.innerWidth < 768 ? '20px 16px' : '40px 32px',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        flex: 1,
+        height: '100%',
+        overflow: 'hidden',
         transition: 'max-width 300ms var(--ease-out)',
       }}>
         {/* Ambient background glow */}
@@ -422,11 +431,16 @@ export default function MyTasks() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 0 }}
               transition={{ duration: 0.2 }}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+              style={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                minHeight: 0,
+                overflow: 'hidden',
+                marginTop: 8
+              }}
             >
-              <div style={{ paddingBottom: 24, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <MyTasksKanban tasks={filteredTasks} onStatusChange={handleStatusChange} />
-              </div>
+              <MyTasksKanban tasks={filteredTasks} onStatusChange={handleStatusChange} />
             </motion.div>
           )}
         </AnimatePresence>

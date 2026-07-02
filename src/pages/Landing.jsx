@@ -6,6 +6,7 @@ import {
   TrendingUp, MessageSquare, Cpu, Globe
 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
+import { podClient } from '../lib/lemma';
 
 /* ── Transcript demo ─────────────────────────────────────── */
 const TRANSCRIPT_TEXT = `Aditya: Shruti can you build the dashboard by July 3?
@@ -325,7 +326,7 @@ export default function Landing() {
   }, []);
 
   function handleAuthClick() {
-    // Navigate to dashboard - AuthGuard will show Lemma login if not authenticated
+    // Navigate to dashboard - AuthGuard will handle authentication
     navigate('/dashboard');
   }
 

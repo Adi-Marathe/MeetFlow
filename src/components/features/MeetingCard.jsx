@@ -4,13 +4,25 @@ import { Video, Clock, Users, ChevronRight, Circle } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { AvatarGroup } from '../ui/Avatar';
 import { formatDateFull, formatTime, getSourceColor, getSourceLabel } from '../../lib/utils';
-import { members } from '../../mock/members';
+import { useRecords } from 'lemma-sdk/react';
+import { podClient } from '../../lib/lemma';
 
 export function MeetingCard({ meeting, index = 0 }) {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
 
-  const participantMembers = meeting.participants
+  // Fetch members from pod
+  const { records: members = [] } = useRecords({ 
+    client: podClient, 
+    tableName: 'members' 
+  });
+
+  // Handle participants as either array or comma-separated string
+  const participantEmails = Array.isArray(meeting.participants) 
+    ? meeting.participants 
+    : (meeting.participants || '').split(',').map(e => (e || '').trim()).filter(Boolean);
+
+  const participantMembers = participantEmails
     .map(email => members.find(m => m.email === email))
     .filter(Boolean);
 
@@ -18,6 +30,7 @@ export function MeetingCard({ meeting, index = 0 }) {
     pending_review: { variant: 'warning', label: 'Pending review', route: 'review' },
     extracted: { variant: 'inprogress', label: 'Extracted', route: 'review' },
     approved: { variant: 'done', label: 'Approved', route: 'board' },
+    completed: { variant: 'done', label: 'Completed', route: 'board' },
     done: { variant: 'muted', label: 'Done', route: 'board' },
   };
 

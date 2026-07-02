@@ -66,7 +66,7 @@ export function TaskCard({
     borderLeft: `3px solid ${priorityColors[task.priority] || 'var(--border-subtle)'}`,
     borderRadius: 'var(--radius-lg)',
     padding: '12px 14px',
-    cursor: draggable ? (isDragging ? 'grabbing' : 'grab') : 'default',
+    cursor: draggable ? (isDragging ? 'grabbing' : 'grab') : (task.meeting_id ? 'pointer' : 'default'),
     opacity: isDragging ? 0.5 : 1,
     position: 'relative',
     userSelect: 'none',
@@ -85,10 +85,15 @@ export function TaskCard({
     <div
       ref={setNodeRef}
       style={style}
+      onClick={() => {
+        if (!draggable && task.meeting_id) {
+          navigate(`/meetings/${task.meeting_id}/board`);
+        }
+      }}
       {...attributes}
       {...listeners}
       onMouseEnter={e => {
-        if (!isDragging && !isOverlay && draggable) {
+        if (!isDragging && !isOverlay) {
           e.currentTarget.style.borderColor = 'var(--border-strong)';
           e.currentTarget.style.borderLeftColor = priorityColors[task.priority] || 'var(--border-strong)';
           e.currentTarget.style.transition = 'border-color 120ms';
@@ -133,7 +138,7 @@ export function TaskCard({
           {!hideOwner && owner && (
             <>
               <Avatar initials={owner.avatar_initials} color={owner.color} size={22} title={owner.name} />
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{owner.name.split(' ')[0]}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{(owner.name || '').split(' ')[0] || 'User'}</span>
             </>
           )}
           {showMeetingSource && meeting && (
@@ -153,7 +158,7 @@ export function TaskCard({
               }}
               title={meeting.title}
             >
-              From: {meeting.title.split(' ').slice(0, 2).join(' ')}
+              From: {(meeting.title || '').split(' ').slice(0, 2).join(' ') || 'Meeting'}
             </span>
           )}
         </div>

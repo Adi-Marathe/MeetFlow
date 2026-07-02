@@ -155,7 +155,18 @@ export function MyTasksKanban({ tasks, onStatusChange }) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div style={{ display: 'flex', gap: 16, height: '100%', minHeight: 400, flex: 1, overflowX: 'auto', paddingBottom: 16, paddingLeft: 4, paddingRight: 4 }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: 16, 
+        height: '100%', 
+        flex: 1, 
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        paddingBottom: 16, 
+        paddingLeft: 4, 
+        paddingRight: 4,
+        minHeight: 0
+      }}>
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.id);
           

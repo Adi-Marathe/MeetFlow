@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import { Video, Zap, TrendingUp, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Video, Zap, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useRecords } from 'lemma-sdk/react'
 import { podClient } from '../lib/lemma'
 import { useCurrentMember } from '../hooks/useCurrentMember'
@@ -7,12 +8,11 @@ import { PageWrapper } from '../components/layout/PageWrapper'
 import { StatCard } from '../components/features/StatCard'
 import { MeetingCard } from '../components/features/MeetingCard'
 import { TaskCard } from '../components/features/TaskCard'
-import { TranscriptUploader } from '../components/features/TranscriptUploader'
-import { Modal } from '../components/ui/Modal'
+import { NewMeetingModal } from '../components/features/NewMeetingModal'
 
 export default function Dashboard() {
   const { name, email, role, isAdmin, isLoading: memberLoading } = useCurrentMember()
-  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const navigate = useNavigate()
   const scrollContainerRef = useRef(null)
 
   console.log('📊 Dashboard rendering')
@@ -22,6 +22,7 @@ export default function Dashboard() {
   const { records: meetings = [], isLoading: meetingsLoading } = useRecords({
     client: podClient,
     tableName: 'meetings',
+    sort: [{ field: 'date', direction: 'desc' }],
   })
 
   // Fetch tasks from Lemma pod
@@ -79,26 +80,41 @@ export default function Dashboard() {
     return 'Good evening'
   })()
 
-  return (
-    <PageWrapper>
-      <div style={{ padding: '32px 36px', maxWidth: 1200, margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 4 }}>
-            {greeting}, {name?.split(' ')[0] || 'there'}
-          </p>
-          <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-            Dashboard
-          </h1>
-        </div>
+  try {
+    // Limit to 5 recent meetings for dashboard
+    const recentMeetings = meetings?.slice(0, 5) ?? []
+    const hasMoreMeetings = meetings?.length > 5
 
-        {/* Stats */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
-          <StatCard
-            icon={Video}
-            label="Meetings this week"
-            value={stats.meetingsThisWeek}
-            sub={`across ${meetings?.length ?? 0} total`}
+    return (
+      <PageWrapper>
+        <div style={{ 
+          padding: '28px clamp(20px, 5vw, 48px) 80px', 
+          paddingTop: window.innerWidth < 768 ? '80px' : '28px', // Extra padding on mobile for toggle button
+          maxWidth: '100%',
+          width: '100%',
+        }}>
+          {/* Header */}
+          <div style={{ marginBottom: 28 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 4 }}>
+              {greeting}, {(name || '').split(' ')[0] || 'there'}
+            </p>
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+              Dashboard
+            </h1>
+          </div>
+
+          {/* Stats - Responsive Grid */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: 16, 
+            marginBottom: 32 
+          }}>
+            <StatCard
+              icon={Video}
+              label="Meetings this week"
+              value={stats.meetingsThisWeek}
+              sub={`across ${meetings?.length ?? 0} total`}
             index={0}
           />
           <StatCard
@@ -128,17 +144,49 @@ export default function Dashboard() {
 
         {/* Recent Meetings */}
         <section style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
               Recent meetings
             </h2>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {meetings?.length ?? 0} total
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {recentMeetings.length} of {meetings?.length ?? 0}
+              </span>
+              {hasMoreMeetings && (
+                <button
+                  onClick={() => navigate('/meetings')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    background: 'var(--accent-subtle)',
+                    border: '1px solid var(--border-accent)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-accent)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 150ms',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--accent)';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--accent-subtle)';
+                    e.currentTarget.style.color = 'var(--text-accent)';
+                  }}
+                >
+                  See all
+                  <ArrowRight size={14} />
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {meetings && meetings.length > 0 ? (
-              meetings.map((m, i) => (
+            {recentMeetings && recentMeetings.length > 0 ? (
+              recentMeetings.map((m, i) => (
                 <MeetingCard key={m.id} meeting={m} index={i} />
               ))
             ) : (
@@ -222,21 +270,43 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* New Meeting Upload Zone */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-              New meeting
-            </h2>
-          </div>
-          <TranscriptUploader />
-        </section>
+        {/* New Meeting Form - Admin Only - Directly on page */}
+        {isAdmin && (
+          <section style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+                New Meeting
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                Paste a transcript to extract tasks automatically
+              </p>
+            </div>
+            <div style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 20,
+            }}>
+              <NewMeetingModal onClose={() => {}} />
+            </div>
+          </section>
+        )}
       </div>
-
-      {/* Upload modal for keyboard shortcut N */}
-      <Modal isOpen={uploadModalOpen} onClose={() => setUploadModalOpen(false)} title="New Meeting">
-        <TranscriptUploader onSuccess={() => setUploadModalOpen(false)} />
-      </Modal>
     </PageWrapper>
-  );
+    );
+  } catch (err) {
+    console.error('🚨 DASHBOARD RENDER CRASH:', err);
+    console.error('📍 Error message:', err.message);
+    console.error('📚 Stack trace:', err.stack);
+    console.error('📋 Component state:', { name, email, role, meetings, allTasks });
+    return (
+      <PageWrapper>
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>
+          <h2>Dashboard Render Error</h2>
+          <p style={{ marginTop: 16, fontFamily: 'monospace' }}>{err.message}</p>
+          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>Check console for full stack trace</p>
+        </div>
+      </PageWrapper>
+    );
+  }
 }

@@ -1,0 +1,8 @@
+{
+  "name": "send_slack_dm",
+  "description": "POSTs an owner email and message to the MeetFlow Vercel endpoint to send a Slack DM.",
+  "type": "API",
+  "visibility": "POD",
+  "code": { "$file": "code.py" },
+  "permissions": { "grants": [] }
+}

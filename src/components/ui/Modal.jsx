@@ -36,20 +36,21 @@ export function Modal({ isOpen, onClose, children, maxWidth = 560, title }) {
         boxShadow: 'var(--shadow-lg)',
         width: '100%',
         maxWidth,
-        maxHeight: '85vh',
-        overflow: 'auto',
+        maxHeight: window.innerWidth < 768 ? '95vh' : '90vh',
+        display: 'flex',
+        flexDirection: 'column',
         animation: 'popIn 0.2s var(--ease-spring)',
-        margin: 16,
+        margin: window.innerWidth < 768 ? 8 : 16,
       }}>
         {title && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '20px 24px 16px',
+            padding: window.innerWidth < 768 ? '16px 20px 12px' : '20px 24px 16px',
             borderBottom: '1px solid var(--border-subtle)',
           }}>
-            <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)' }}>{title}</h2>
+            <h2 style={{ fontSize: window.innerWidth < 768 ? 15 : 16, fontWeight: 500, color: 'var(--text-primary)' }}>{title}</h2>
             <button
               onClick={onClose}
               style={{
@@ -68,7 +69,11 @@ export function Modal({ isOpen, onClose, children, maxWidth = 560, title }) {
             >×</button>
           </div>
         )}
-        <div style={{ padding: title ? '16px 24px 24px' : '24px' }}>
+        <div style={{ 
+          padding: title ? (window.innerWidth < 768 ? '12px 20px 20px' : '16px 24px 24px') : (window.innerWidth < 768 ? '20px' : '24px'),
+          overflow: 'auto',
+          flex: 1,
+        }}>
           {children}
         </div>
       </div>

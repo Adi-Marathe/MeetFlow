@@ -43,7 +43,7 @@ function RoleRedirect() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (isLoading) return
+    if (isLoading || role === null) return  // Wait for role to be determined
     
     // Redirect to appropriate page based on role
     if (role === 'admin') {
@@ -55,7 +55,7 @@ function RoleRedirect() {
     }
   }, [role, isLoading, navigate])
 
-  if (isLoading) {
+  if (isLoading || role === null) {
     return <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div>
   }
 
@@ -66,11 +66,15 @@ function RoleRedirect() {
 function PrivateRoute({ children, allowedRoles }) {
   const { role, isLoading } = useCurrentMember()
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
-    if (isLoading) return
+    if (isLoading || role === null) return  // Wait for role to be determined
+    
+    console.log('🔒 PrivateRoute check:', { path: location.pathname, role, allowedRoles, allowed: allowedRoles.includes(role) })
     
     if (!allowedRoles.includes(role)) {
+      console.log('❌ Access denied, redirecting from', location.pathname)
       // Redirect to appropriate page based on role
       if (role === 'admin') {
         navigate('/dashboard', { replace: true })
@@ -80,9 +84,9 @@ function PrivateRoute({ children, allowedRoles }) {
         navigate('/my-tasks', { replace: true })
       }
     }
-  }, [role, isLoading, allowedRoles, navigate])
+  }, [role, isLoading, allowedRoles, navigate, location.pathname])
 
-  if (isLoading) {
+  if (isLoading || role === null) {
     return <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div>
   }
 
@@ -96,9 +100,26 @@ function PrivateRoute({ children, allowedRoles }) {
 // Authenticated app with sidebar
 function AuthenticatedApp() {
   const location = useLocation()
-  const { role } = useCurrentMember()
+  const navigate = useNavigate()
+  const { role, isLoading } = useCurrentMember()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [newMeetingOpen, setNewMeetingOpen] = useState(false)
+
+  // Auto-redirect from auth root based on role
+  useEffect(() => {
+    if (isLoading || role === null) return  // Wait for role to be determined
+    
+    // If user lands on root of authenticated section, redirect based on role
+    if (location.pathname === '/' || location.pathname === '') {
+      if (role === 'admin') {
+        navigate('/dashboard', { replace: true })
+      } else if (role === 'observer') {
+        navigate('/board/public', { replace: true })
+      } else if (role === 'member') {
+        navigate('/my-tasks', { replace: true })
+      }
+    }
+  }, [role, isLoading, location.pathname, navigate])
 
   // Keyboard shortcuts
   useKeyboardShortcut('k', () => setPaletteOpen(true), { metaKey: true })
@@ -117,9 +138,6 @@ function AuthenticatedApp() {
       <main style={{ flex: 1, height: '100vh', overflow: 'hidden', position: 'relative' }}>
         <AnimatePresence mode="wait" initial={false}>
           <Routes location={location} key={location.key}>
-            {/* Root path redirects based on role */}
-            <Route path="/" element={<RoleRedirect />} />
-
             <Route path="/dashboard" element={
               <AnimatedPage>
                 <PrivateRoute allowedRoles={['admin']}>
@@ -176,6 +194,15 @@ function AuthenticatedApp() {
               </AnimatedPage>
             } />
 
+            {/* Global board view (all tasks) */}
+            <Route path="/board" element={
+              <AnimatedPage>
+                <PrivateRoute allowedRoles={['admin', 'member', 'observer']}>
+                  <BoardView />
+                </PrivateRoute>
+              </AnimatedPage>
+            } />
+
             {/* Public observer board */}
             <Route path="/board/public" element={
               <AnimatedPage>
@@ -191,32 +218,91 @@ function AuthenticatedApp() {
         <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
         
         <Modal isOpen={newMeetingOpen} onClose={() => setNewMeetingOpen(false)} title="New Meeting">
-          <TranscriptUploader onSuccess={() => setNewMeetingOpen(false)} />
+          <TranscriptUploader client={podClient} onSuccess={() => setNewMeetingOpen(false)} />
         </Modal>
       </main>
     </div>
   )
 }
 
-// Main App Component with AuthGuard
+// Wrapper for authenticated routes
+function ProtectedRoutes() {
+  return (
+    <AuthGuard 
+      client={podClient} 
+      appName="MeetFlow"
+    >
+      <AuthenticatedApp />
+    </AuthGuard>
+  )
+}
+
+// Main App Component
 export default function App() {
+  const currentPath = window.location.pathname;
+  console.log('🚀 App rendering, path:', currentPath);
+  
   return (
     <BrowserRouter>
       <ThemeProvider>
         <ToastProvider>
           <Routes>
             {/* PUBLIC ROUTE - No authentication required */}
-            <Route path="/" element={<Landing />} />
+            <Route path="/" exact element={<Landing />} />
             
-            {/* ALL OTHER ROUTES - Protected by AuthGuard */}
-            <Route path="*" element={
-              <AuthGuard client={podClient} appName="MeetFlow">
-                <AuthenticatedApp />
-              </AuthGuard>
-            } />
+            {/* AUTH CALLBACK ROUTE - Handle Lemma auth callback */}
+            <Route path="/auth" element={<AuthCallback />} />
+            
+            {/* ALL OTHER ROUTES - Protected by single AuthGuard wrapper */}
+            <Route path="*" element={<ProtectedRoutes />} />
           </Routes>
         </ToastProvider>
       </ThemeProvider>
     </BrowserRouter>
   )
+}
+
+// Auth callback handler - redirects based on role after auth
+function AuthCallback() {
+  const navigate = useNavigate();
+  const { role, isLoading } = useCurrentMember();
+  
+  console.log('🔄 Auth callback received');
+  
+  useEffect(() => {
+    if (isLoading || role === null) return;  // Wait for role to be determined
+    
+    console.log('➡️ Redirecting based on role:', role);
+    const timer = setTimeout(() => {
+      if (role === 'admin') {
+        navigate('/dashboard', { replace: true });
+      } else if (role === 'observer') {
+        navigate('/board/public', { replace: true });
+      } else if (role === 'member') {
+        navigate('/my-tasks', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [navigate, role, isLoading]);
+  
+  return (
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      height: '100vh',
+      fontFamily: 'var(--font-sans)',
+      color: 'var(--text-primary)',
+      background: 'var(--bg-base)'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 24, marginBottom: 16 }}>✅</div>
+        <div style={{ fontSize: 16, marginBottom: 8, fontWeight: 600 }}>Authentication successful</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Redirecting...</div>
+      </div>
+    </div>
+  );
 }

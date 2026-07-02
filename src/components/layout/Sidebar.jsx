@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Video, LayoutGrid, CheckSquare,
   MessageSquare, Settings, Zap, ChevronLeft, ChevronRight,
-  Sun, Moon, Command, LogOut
+  Sun, Moon, Command, LogOut, Menu, X
 } from 'lucide-react';
 import { useCurrentMember } from '../../hooks/useCurrentMember';
 import { useTheme } from '../../context/ThemeContext';
 import { Avatar } from '../ui/Avatar';
-import { members } from '../../mock/members';
+import { useRecords } from 'lemma-sdk/react';
+import { podClient } from '../../lib/lemma';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: ['admin'] },
@@ -21,10 +22,38 @@ const navItems = [
 
 export function Sidebar({ onCommandPalette }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { member, role, email, name } = useCurrentMember();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Fetch members from pod
+  const { records: members = [] } = useRecords({ 
+    client: podClient, 
+    tableName: 'members' 
+  });
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setMobileOpen(false);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    if (isMobile) {
+      setMobileOpen(false);
+    }
+  }, [location.pathname, isMobile]);
 
   const visibleItems = navItems.filter(item => item.roles.includes(role));
   const sidebarWidth = collapsed ? 60 : 240;
@@ -42,20 +71,65 @@ export function Sidebar({ onCommandPalette }) {
   };
 
   return (
-    <aside style={{
-      width: sidebarWidth,
-      minWidth: sidebarWidth,
-      height: '100vh',
-      background: 'var(--bg-sidebar)',
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'width 250ms var(--ease-smooth), min-width 250ms var(--ease-smooth)',
-      overflow: 'visible',
-      borderRight: '1px solid var(--border-subtle)',
-      position: 'relative',
-      zIndex: 100,
-      flexShrink: 0,
-    }}>
+    <>
+      {/* Mobile Menu Toggle Button */}
+      {isMobile && (
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: mobileOpen ? 256 : 16, // Move right when sidebar is open
+            zIndex: 150,
+            width: 40,
+            height: 40,
+            borderRadius: 8,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-default)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+            boxShadow: 'var(--shadow-lg)',
+            transition: 'left 250ms var(--ease-smooth)',
+          }}
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      )}
+
+      {/* Backdrop for mobile */}
+      {isMobile && mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 99,
+          }}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside style={{
+        width: isMobile ? (mobileOpen ? 240 : 0) : sidebarWidth,
+        minWidth: isMobile ? (mobileOpen ? 240 : 0) : sidebarWidth,
+        height: '100vh',
+        background: 'var(--bg-sidebar)',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width 250ms var(--ease-smooth), min-width 250ms var(--ease-smooth)',
+        overflow: isMobile && !mobileOpen ? 'hidden' : 'visible',
+        borderRight: '1px solid var(--border-subtle)',
+        position: isMobile ? 'fixed' : 'relative',
+        left: 0,
+        top: 0,
+        zIndex: 100,
+        flexShrink: 0,
+        transform: isMobile ? (mobileOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+      }}>
       {/* Logo row */}
       <div style={{
         display: 'flex',
@@ -99,7 +173,7 @@ export function Sidebar({ onCommandPalette }) {
             <Zap size={14} color="#fff" fill="#fff" />
           </div>
         )}
-        {!collapsed && (
+        {!collapsed && !isMobile && (
           <button
             onClick={() => setCollapsed(true)}
             style={{
@@ -116,7 +190,7 @@ export function Sidebar({ onCommandPalette }) {
             <ChevronLeft size={14} />
           </button>
         )}
-        {collapsed && (
+        {collapsed && !isMobile && (
           <button
             onClick={() => setCollapsed(false)}
             style={{
@@ -134,7 +208,7 @@ export function Sidebar({ onCommandPalette }) {
       </div>
 
       {/* User info */}
-      {currentUser && (
+      {member && (
         <div style={{
           padding: collapsed ? '12px 0' : '12px 12px',
           borderBottom: '1px solid var(--border-subtle)',
@@ -143,10 +217,10 @@ export function Sidebar({ onCommandPalette }) {
           justifyContent: collapsed ? 'center' : 'flex-start',
         }}>
           <Avatar
-            initials={currentUser.avatar_initials}
-            color={currentUser.color}
+            initials={(name || '').split(' ').map(n => (n || '')[0]).filter(Boolean).join('') || (email || '')[0]?.toUpperCase() || '?'}
+            color={member?.color || '#6366f1'}
             size={32}
-            title={currentUser.name}
+            title={name}
           />
           {!collapsed && (
             <div style={{ overflow: 'hidden', flex: 1 }}>
@@ -154,7 +228,7 @@ export function Sidebar({ onCommandPalette }) {
                 fontSize: 13, fontWeight: 500,
                 color: 'var(--text-on-sidebar)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>{currentUser.name}</div>
+              }}>{name}</div>
               <span style={{
                 display: 'inline-block',
                 fontSize: 10, fontWeight: 600,
@@ -164,7 +238,7 @@ export function Sidebar({ onCommandPalette }) {
                 borderRadius: 4,
                 textTransform: 'capitalize',
                 letterSpacing: '0.03em',
-              }}>{currentUser.role}</span>
+              }}>{role}</span>
             </div>
           )}
         </div>
@@ -298,5 +372,6 @@ export function Sidebar({ onCommandPalette }) {
         </div>
       </div>
     </aside>
+    </>
   );
 }

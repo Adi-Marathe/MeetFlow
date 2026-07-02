@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateRecord, useWorkflowRun } from 'lemma-sdk/react'
-import { useAuth } from '../../context/AuthContext'
+import { useCurrentMember } from '../../hooks/useCurrentMember'
 import { Button } from '../ui/Button'
 import { AlertCircle } from 'lucide-react'
 
@@ -10,7 +10,7 @@ e.g. Aditya: Shruti can you complete the dashboard by July 3?
      Shruti: Yes, I'll have it ready.`
 
 export function TranscriptUploader({ client, onSuccess }) {
-  const { email } = useAuth()
+  const { email } = useCurrentMember()
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [transcript, setTranscript] = useState('')
@@ -18,6 +18,12 @@ export function TranscriptUploader({ client, onSuccess }) {
   const [transcriptError, setTranscriptError] = useState(false)
   const [processing, setProcessing] = useState(false)
   const cardRef = useRef(null)
+
+  // Safety check for hooks
+  if (!client) {
+    console.error('TranscriptUploader: client prop is required')
+    return <div style={{ padding: 20, color: 'var(--danger)' }}>Error: Missing client configuration</div>
+  }
 
   const { create } = useCreateRecord(client, { tableName: 'meetings' })
   const workflow = useWorkflowRun({
@@ -27,14 +33,14 @@ export function TranscriptUploader({ client, onSuccess }) {
 
   async function handleSubmit() {
     let valid = true
-    if (!title.trim()) {
+    if (!title || !(title || '').trim()) {
       setTitleError(true)
       valid = false
     } else {
       setTitleError(false)
     }
 
-    if (!transcript.trim()) {
+    if (!transcript || !(transcript || '').trim()) {
       setTranscriptError(true)
       valid = false
     } else {
@@ -52,12 +58,12 @@ export function TranscriptUploader({ client, onSuccess }) {
       const meetingId = `mtg-${Date.now()}`
       await create({
         id: meetingId,
-        title: title.trim() || 'Untitled Meeting',
+        title: (title || '').trim() || 'Untitled Meeting',
         date: new Date().toISOString().split('T')[0],
         source: 'paste',
-        raw_transcript: transcript.trim(),
+        raw_transcript: (transcript || '').trim(),
         status: 'pending_review',
-        participants: email,
+        participants: email || '',
       })
 
       await workflow.start({})
@@ -137,8 +143,8 @@ export function TranscriptUploader({ client, onSuccess }) {
           </div>
           <input
             type="text"
-            value={title}
-            onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(false); }}
+            value={title || ''}
+            onChange={e => { setTitle(e.target.value || ''); if (titleError) setTitleError(false); }}
             placeholder="e.g. Q3 Sprint Planning, Client Onboarding..."
             disabled={processing}
             style={{
@@ -180,8 +186,8 @@ export function TranscriptUploader({ client, onSuccess }) {
             )}
           </div>
           <textarea
-            value={transcript}
-            onChange={e => { setTranscript(e.target.value); if (transcriptError) setTranscriptError(false); }}
+            value={transcript || ''}
+            onChange={e => { setTranscript(e.target.value || ''); if (transcriptError) setTranscriptError(false); }}
             placeholder={PLACEHOLDER}
             disabled={processing}
             style={{

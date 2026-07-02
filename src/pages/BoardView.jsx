@@ -5,7 +5,7 @@ import { PageWrapper } from '../components/layout/PageWrapper';
 import { KanbanBoard } from '../components/features/KanbanBoard';
 import { AvatarGroup } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
-import { useAuth } from '../context/AuthContext';
+import { useCurrentMember } from '../hooks/useCurrentMember';
 import { useToast } from '../context/ToastContext';
 import { useRecords } from 'lemma-sdk/react';
 import { client } from '../lib/lemma';
@@ -14,7 +14,7 @@ import { formatDateFull } from '../lib/utils';
 export default function BoardView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { member: currentUser, email } = useCurrentMember();
   const { addToast } = useToast();
 
   const [filterMeeting, setFilterMeeting] = useState('all');
@@ -25,10 +25,10 @@ export default function BoardView() {
   const { records: members = [] } = useRecords({ client, tableName: 'members' });
 
   const isPublic = id === 'public';
-  const isGlobal = !id && !isPublic;
-  const meetingId = isPublic ? 'mtg-demo-001' : (id || null);
+  const isGlobal = !id; // /board route with no id
+  const meetingId = isPublic ? null : (id || null);
   const meeting = meetingId ? meetings.find(m => m.id === meetingId) : null;
-  const baseTasks = isGlobal ? tasks : tasks.filter(t => t.meeting_id === meetingId);
+  const baseTasks = isGlobal || isPublic ? tasks : tasks.filter(t => t.meeting_id === meetingId);
   
   const boardTasks = baseTasks.filter(t => {
     if (filterMeeting !== 'all' && t.meeting_id !== filterMeeting) return false;
@@ -39,14 +39,19 @@ export default function BoardView() {
   const isObserver = currentUser?.role === 'observer' || isPublic;
 
   const participantMembers = meeting 
-    ? (meeting.participants || []).map(email => members.find(m => m.email === email)).filter(Boolean)
+    ? (typeof meeting.participants === 'string' 
+        ? meeting.participants.split(',').map(e => e.trim()).map(email => members.find(m => m.email === email)).filter(Boolean)
+        : Array.isArray(meeting.participants) 
+          ? meeting.participants.map(email => members.find(m => m.email === email)).filter(Boolean)
+          : members)
     : members;
 
   function handleShare() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      addToast('Link copied ✓', 'success');
+    const publicLink = 'https://meetflow.apps.lemma.work/board/public';
+    navigator.clipboard.writeText(publicLink).then(() => {
+      addToast('Public board link copied ✓', 'success');
     }).catch(() => {
-      addToast('Link copied to clipboard', 'success');
+      addToast('Public board link copied to clipboard', 'success');
     });
   }
 
@@ -63,7 +68,15 @@ export default function BoardView() {
   }
 
   const content = (
-    <div style={{ padding: '24px 32px 0', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ 
+      padding: '24px clamp(20px, 3vw, 32px) 0',
+      paddingTop: window.innerWidth < 768 ? '80px' : '24px',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      position: 'relative'
+    }}>
       {/* Ambient background glow */}
       <div style={{
         position: 'absolute', top: -150, left: '20%', width: 500, height: 500,
@@ -177,7 +190,12 @@ export default function BoardView() {
       </div>
 
       {/* Kanban */}
-      <KanbanBoard tasks={boardTasks} readOnly={isObserver} />
+      <KanbanBoard 
+        tasks={boardTasks} 
+        readOnly={isObserver} 
+        currentUserEmail={email}
+        userRole={currentUser?.role || 'member'}
+      />
       </div>
     </div>
   );

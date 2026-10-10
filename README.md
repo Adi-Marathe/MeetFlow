@@ -230,4 +230,4 @@ MeetFlow/
 
 ## Team
 
-Built by [Aditya Marathe](https://github.com/Adi-Marathe) and Shruti Aher for the Gappy AI Hackathon 2026.
+Built by [Aditya Marathe](https://github.com/Adi-Marathe) for the Gappy AI Hackathon 2026.
